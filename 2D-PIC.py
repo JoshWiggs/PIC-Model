@@ -11,12 +11,12 @@ y_max = 1
 t_min = 0
 t_max = 0.5
 v_min = 0
-v_max = 10
+v_max = 50
 q_c = 1 #currently unused
 
 nx = 20 #Number of steps taken from y_min to y_max
 ny = 20 #Number of steps taken from x_min to x_max
-nt = 2 #Number of time steps
+nt = 100 #Number of time steps
 n_smoothing = 100 #For differencing methods that require smoothing
 PPC = 1 #Number of particles per cell
 
@@ -57,6 +57,40 @@ for t in range(0,nt):
     q_grid[:][:] = 0
     print(t)
 
+    i = 0
+
+    while i < T_PPC:
+        x_i = 0
+        y_i = 0
+
+        x_i = np.floor(Par[i][0] / dx)
+        y_i = np.floor(Par[i][1] / dy)
+
+        if x_i < 0 or x_i > int(nx-1):
+
+            print('Out of range:' + str(i))
+            Par.pop(int(i))
+
+        else:
+
+            pass
+
+        if y_i < 0 or y_i > int(ny-1):
+
+            print('Out of range:' + str(i))
+            Par.pop(int(i))
+
+        else:
+
+            pass
+
+        T_PPC = len(Par)
+        i += 1
+
+    print('Position check completed')
+    #Recalculate the number of particles in the simulation area
+    T_PPC = len(Par)
+
     #Step 1: Compute charge density on grid using bilinear interpolation interpretation
     #(first-order weighting) from particle locations
     g_info = np.zeros((T_PPC,4))
@@ -69,6 +103,7 @@ for t in range(0,nt):
 
         x_i = np.floor(Par[i][0] / dx)
         y_i = np.floor(Par[i][1] / dy)
+
 
         x_i = int(x_i)
         y_i = int(y_i)
