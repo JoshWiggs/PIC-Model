@@ -2,6 +2,7 @@ import numpy as np
 import random as ran
 import scipy.constants as con
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 #Define input parameters
 x_min = 0
@@ -12,7 +13,8 @@ t_min = 0
 t_max = 2.0
 v_min = -0.25
 v_max = 0.25
-q_c = 1 #currently unused
+q_c = [1,-1] #particle charge
+m = [1837,1] #particle mass
 
 nx = 20 #Number of steps taken from y_min to y_max
 ny = 20 #Number of steps taken from x_min to x_max
@@ -44,16 +46,23 @@ Par_x = np.zeros(T_PPC)
 Par_y = np.zeros(T_PPC)
 Par_vx = np.zeros(T_PPC)
 Par_vy = np.zeros(T_PPC)
+Par_q = np.zeros(T_PPC)
+Par_m = np.zeros(T_PPC)
 
 for i in range(0,T_PPC):
+    #TODO: Generalise
+    j = ran.randint(0,1) #Random integer for mass and charge selection
+
     Par_x[i] = ran.uniform(x_min,x_max) #Particle x coordinate
     Par_y[i] = ran.uniform(y_min,y_max) #Particle y coordinate
     Par_vx[i] = ran.uniform(v_min,v_max) #Particle velocity on the x direction
     Par_vy[i] = ran.uniform(v_min,v_max) #Particle velocity on the y direction
+    Par_q[i] = q_c[j] #Particle charge
+    Par_m[i] = m[j] #Particle mass
 
 #Join particle position lists into one array
 #TODO: Rework this as data types produced seem to make calcultions difficult
-Par = list(zip(Par_x,Par_y,Par_vx,Par_vy))
+Par = list(zip(Par_x,Par_y,Par_vx,Par_vy,Par_q,Par_m))
 
 #Numerical loop responsible for interating the particles through time
 for t in range(0,nt):
@@ -153,10 +162,10 @@ for t in range(0,nt):
         #Calculate contribution of each particle's charge to surrounding grid
         #locations in order to calculate charge density on grid
         #TODO: add charge as a particle parameter
-        q_grid[x_i][y_i] += ((dx - hx) * (dy - hy) / (dx * dy))
-        q_grid[x_i + 1][y_i] += ((hx * (dy - hy)) / (dx * dy))
-        q_grid[x_i + 1][y_i + 1] += ((hx * hy) / (dx * dy))
-        q_grid[x_i][y_i + 1] += (((dx - hx)*hy) / (dx*dy))
+        q_grid[x_i][y_i] += Par[i][4]*((dx - hx) * (dy - hy) / (dx * dy))
+        q_grid[x_i + 1][y_i] += Par[i][4]*((hx * (dy - hy)) / (dx * dy))
+        q_grid[x_i + 1][y_i + 1] += Par[i][4]*((hx * hy) / (dx * dy))
+        q_grid[x_i][y_i + 1] += Par[i][4]*(((dx - hx)*hy) / (dx*dy))
 
     #Step 2: Compute Electric Potential
     for n in range(0,n_smoothing):
@@ -197,9 +206,9 @@ for t in range(0,nt):
         E_Par_y = (E_y[x_i][y_i]*(dx*dy)/((dx-hx)-(dy-hy))) + (E_y[x_i+1][y_i]*((dx*dy)/(hx*(dy-hy)))) + (E_y[x_i+1][y_i+1])*((dx*dy)/(hx*hy)) + (E_y[x_i][y_i+1]*((dx*dy)/(dx-hx)*hy))
 
         #TODO: missing charge and mass from calculation
-        u_x = u_x_old - (dt * E_Par_x)
+        u_x = u_x_old - (((dt * Par[i][4]) / Par[i][5]) * E_Par_x)
 
-        u_y = u_y_old - (dt * E_Par_y)
+        u_y = u_y_old - (((dt * Par[i][4]) / Par[i][5]) * E_Par_y)
 
         Par[i][2] = u_x
         Par[i][3] = u_y
@@ -213,13 +222,15 @@ for t in range(0,nt):
         Par_y_plot = [i[1] for i in Par]
         Par_vx_plot = [i[2] for i in Par]
         Par_vy_plot = [i[3] for i in Par]
+        Par_q_plot = [i[4] for i in Par]
         plt.clf()
         plt.subplot(2,1,1)
         plt.contourf(X,Y,E_mag)
-        #plt.colorbar(label = '$|E|$')
+        plt.colorbar(label = '$|E|$')
         plt.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
         plt.subplot(2,1,2)
-        plt.scatter(Par_x_plot,Par_y_plot)
+        plt.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
+        plt.colorbar(label = '$q$')
         plt.xlim(x_min,x_max)
         plt.ylim(y_min,y_max)
         plt.draw()
