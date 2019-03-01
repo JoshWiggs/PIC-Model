@@ -14,7 +14,7 @@ t_max = 2.0
 v_min = -0.25
 v_max = 0.25
 q_c = [1,-1] #particle charge
-m = [1837,1] #particle mass
+m = [938000000,511000] #particle mass
 
 nx = 20 #Number of steps taken from y_min to y_max
 ny = 20 #Number of steps taken from x_min to x_max
@@ -51,7 +51,7 @@ Par_m = np.zeros(T_PPC)
 
 for i in range(0,T_PPC):
     #TODO: Generalise
-    j = ran.randint(0,1) #Random integer for mass and charge selection
+    j = ran.randint(0,int(len(q_c)-1)) #Random integer for mass and charge selection
 
     Par_x[i] = ran.uniform(x_min,x_max) #Particle x coordinate
     Par_y[i] = ran.uniform(y_min,y_max) #Particle y coordinate
@@ -146,6 +146,8 @@ for t in range(0,nt):
         y_i = int(np.floor(Par[i][1] / dy))
 
         #Calculate distance of particle from grid location
+        #DEBUG: If a particle outside the simulation  area has not been removed
+        #       raise error and return particle information
         try:
             hx = Par[i][0] - x[x_i]
             hy = Par[i][1] - y[y_i]
@@ -189,8 +191,11 @@ for t in range(0,nt):
     #Step 4: Move particles
     for i in range(0,T_PPC):
 
+        #Safety check for particle information data type
         Par[i] = list(Par[i])
 
+        #Access particle information and the grid information relating to they
+        #particle for use in calculating particle motion
         x_i = int(g_info[i][0])
         y_i = int(g_info[i][1])
         u_x_old = float(Par[i][2])
@@ -198,21 +203,27 @@ for t in range(0,nt):
         hx = float(g_info[i][2])
         hy = float(g_info[i][3])
 
-        E_Par_x = float(0)
-        E_Par_y = float(0)
+        #Clear variables for reuse
+        E_Par_x = float(0) #Electric field felt by the particle in the x domain
+        E_Par_y = float(0) #Electric field felt by the particle in the y domain
 
+        #Calculate the electric field strength at the particle from each of the
+        #surrounding grid points using bilinear interpolation interpretation
         E_Par_x = (E_x[x_i][y_i]*(dx*dy)/((dx-hx)*(dy-hy))) + (E_x[x_i+1][y_i]*((dx*dy)/(hx*(dy-hy)))) + (E_x[x_i+1][y_i+1])*((dx*dy)/(hx*hy)) + (E_x[x_i][y_i+1]*((dx*dy)/(dx-hx)*hy))
 
         E_Par_y = (E_y[x_i][y_i]*(dx*dy)/((dx-hx)-(dy-hy))) + (E_y[x_i+1][y_i]*((dx*dy)/(hx*(dy-hy)))) + (E_y[x_i+1][y_i+1])*((dx*dy)/(hx*hy)) + (E_y[x_i][y_i+1]*((dx*dy)/(dx-hx)*hy))
 
+        #Using updated electic field calculate updated particle velocities
         #TODO: missing charge and mass from calculation
         u_x = u_x_old - (((dt * Par[i][4]) / Par[i][5]) * E_Par_x)
 
         u_y = u_y_old - (((dt * Par[i][4]) / Par[i][5]) * E_Par_y)
 
+        #Update paricle velocity
         Par[i][2] = u_x
         Par[i][3] = u_y
 
+        #Use particle velocity to calculate new particle position
         Par[i][0] += dt*u_x
         Par[i][1] += dt*u_y
 
