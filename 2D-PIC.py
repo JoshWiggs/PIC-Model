@@ -4,6 +4,28 @@ import scipy.constants as con
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
+#Options
+class options:
+
+    def __init__(self):
+            self.DebyeTest = bool(False)
+
+    class visual:
+
+        def __init__(self):
+            self.write_movie = bool(True)
+
+opt = options()
+vis = options.visual()
+
+if vis.write_movie is True:
+
+    #Import modules for gif writing
+    import matplotlib
+    matplotlib.use('Agg')
+    import imageio
+    import matplotlib.gridspec as gridspec
+
 #Define input parameters
 x_min = 0
 x_max = 1
@@ -11,15 +33,15 @@ y_min = 0
 y_max = 1
 t_min = 0
 t_max = 2.0
-v_min = -0.25
-v_max = 0.25
+v_min = -0.10
+v_max = 0.10
 q_c = [1,-1] #particle charge
-m = [1837,1] #particle mass
+m = [938000000,511000] #particle mass
 
 nx = 20 #Number of steps taken from y_min to y_max
 ny = 20 #Number of steps taken from x_min to x_max
-nt = 200 #Number of time steps
-n_smoothing = 100 #For differencing methods that require smoothing
+nt = 1000 #Number of time steps
+n_smoothing = 200 #For differencing methods that require smoothing
 PPC = 1 #Number of particles per cell
 
 phi = np.zeros(((nx + 1),(ny + 1))) #Electric potential
@@ -49,9 +71,23 @@ Par_vy = np.zeros(T_PPC)
 Par_q = np.zeros(T_PPC)
 Par_m = np.zeros(T_PPC)
 
+if vis.write_movie is True:
+
+    #Make a figure, get the axes
+    fig = plt.Figure()
+    ax = fig.gca()
+    gs = gridspec.GridSpec(2, 1, figure=fig)
+
+    # Set the figure canvas to the Agg backend and get the width/height of the canvas (in pixels)
+    fig.canvas = matplotlib.backends.backend_agg.FigureCanvasAgg(fig)
+    w,h = fig.canvas.get_renderer().get_canvas_width_height()
+
+    # Setup the imageio writer.
+    writer = imageio.get_writer('electrons_protons.gif', fps=50)
+
 for i in range(0,T_PPC):
     #TODO: Generalise
-    j = ran.randint(0,1) #Random integer for mass and charge selection
+    j = ran.randint(0,int(len(q_c)-1)) #Random integer for mass and charge selection
 
     Par_x[i] = ran.uniform(x_min,x_max) #Particle x coordinate
     Par_y[i] = ran.uniform(y_min,y_max) #Particle y coordinate
@@ -64,8 +100,28 @@ for i in range(0,T_PPC):
 #TODO: Rework this as data types produced seem to make calcultions difficult
 Par = list(zip(Par_x,Par_y,Par_vx,Par_vy,Par_q,Par_m))
 
+##### If the Debye test is active then generate the Debye test particle and
+##### append it as the final item in the particle list
+if opt.DebyeTest is True:
+
+    D_Par_x = ((x_min + x_max) / 2)
+    D_Par_y = ((y_min + y_max) / 2)
+    D_Par_vx = 0.0
+    D_Par_vy = 0.0
+    D_Par_q = 100000.0
+    D_Par_m = 938000000
+
+    D_Par = [D_Par_x,D_Par_y,D_Par_vx,D_Par_vy,D_Par_q,D_Par_m]
+
+    Par.append(D_Par)
+
 #Numerical loop responsible for interating the particles through time
 for t in range(0,nt):
+
+    if vis.write_movie is True:
+
+        #Clear the axes so we can draw the new frame
+        ax.cla()
 
     #Print index 't' every 10 time steps to show progress
     if t % 10 == 0:
@@ -146,6 +202,8 @@ for t in range(0,nt):
         y_i = int(np.floor(Par[i][1] / dy))
 
         #Calculate distance of particle from grid location
+        #DEBUG: If a particle outside the simulation  area has not been removed
+        #       raise error and return particle information
         try:
             hx = Par[i][0] - x[x_i]
             hy = Par[i][1] - y[y_i]
@@ -189,8 +247,11 @@ for t in range(0,nt):
     #Step 4: Move particles
     for i in range(0,T_PPC):
 
+        #Safety check for particle information data type
         Par[i] = list(Par[i])
 
+        #Access particle information and the grid information relating to they
+        #particle for use in calculating particle motion
         x_i = int(g_info[i][0])
         y_i = int(g_info[i][1])
         u_x_old = float(Par[i][2])
@@ -198,46 +259,94 @@ for t in range(0,nt):
         hx = float(g_info[i][2])
         hy = float(g_info[i][3])
 
-        E_Par_x = float(0)
-        E_Par_y = float(0)
+        #Clear variables for reuse
+        E_Par_x = float(0) #Electric field felt by the particle in the x domain
+        E_Par_y = float(0) #Electric field felt by the particle in the y domain
 
+        #Calculate the electric field strength at the particle from each of the
+        #surrounding grid points using bilinear interpolation interpretation
         E_Par_x = (E_x[x_i][y_i]*(dx*dy)/((dx-hx)*(dy-hy))) + (E_x[x_i+1][y_i]*((dx*dy)/(hx*(dy-hy)))) + (E_x[x_i+1][y_i+1])*((dx*dy)/(hx*hy)) + (E_x[x_i][y_i+1]*((dx*dy)/(dx-hx)*hy))
 
         E_Par_y = (E_y[x_i][y_i]*(dx*dy)/((dx-hx)-(dy-hy))) + (E_y[x_i+1][y_i]*((dx*dy)/(hx*(dy-hy)))) + (E_y[x_i+1][y_i+1])*((dx*dy)/(hx*hy)) + (E_y[x_i][y_i+1]*((dx*dy)/(dx-hx)*hy))
 
+        #Using updated electic field calculate updated particle velocities
         #TODO: missing charge and mass from calculation
         u_x = u_x_old - (((dt * Par[i][4]) / Par[i][5]) * E_Par_x)
 
         u_y = u_y_old - (((dt * Par[i][4]) / Par[i][5]) * E_Par_y)
 
+        ##### If Debye physical test is being conducted then the final particle
+        ##### in the list is the stationary Debye test particle. Therefore, the
+        ##### velocities are set to zero to prevent motion
+        if opt.DebyeTest is True:
+            if i == int(T_PPC-1):
+
+                u_x = 0.0
+                u_y = 0.0
+
+        #Update paricle velocity
         Par[i][2] = u_x
         Par[i][3] = u_y
 
+        #Use particle velocity to calculate new particle position
         Par[i][0] += dt*u_x
         Par[i][1] += dt*u_y
 
     #Produce visuals for each time step
-    if t % 1==0:
+    if vis.write_movie is False:
+
+        if t % 1==0:
+            Par_x_plot = [i[0] for i in Par]
+            Par_y_plot = [i[1] for i in Par]
+            Par_vx_plot = [i[2] for i in Par]
+            Par_vy_plot = [i[3] for i in Par]
+            Par_q_plot = [i[4] for i in Par]
+            plt.clf()
+            plt.subplot(2,1,1)
+            plt.contourf(X,Y,E_mag)
+            plt.colorbar(label = '$|E|$')
+            plt.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
+            plt.subplot(2,1,2)
+            plt.scatter(Par_x_plot,Par_y_plot)
+            #plt.colorbar(label = '$q$')
+            plt.xlim(x_min,x_max)
+            plt.ylim(y_min,y_max)
+            plt.draw()
+            plt.pause(0.001)
+
+    else:
+        #Write gif
+        # Draw the plot and then make sure that the canvas renderer draws it.
         Par_x_plot = [i[0] for i in Par]
         Par_y_plot = [i[1] for i in Par]
         Par_vx_plot = [i[2] for i in Par]
         Par_vy_plot = [i[3] for i in Par]
         Par_q_plot = [i[4] for i in Par]
-        plt.clf()
-        plt.subplot(2,1,1)
-        plt.contourf(X,Y,E_mag)
-        plt.colorbar(label = '$|E|$')
-        plt.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
-        plt.subplot(2,1,2)
-        plt.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
-        plt.colorbar(label = '$q$')
-        plt.xlim(x_min,x_max)
-        plt.ylim(y_min,y_max)
-        plt.draw()
-        plt.pause(0.001)
+        #ax = fig.add_subplot(gs[0,0])
+        #ax.contourf(X,Y,E_mag)
+        #ax.colorbar(label = '$|E|$')
+        ax.set_title('$t=$ {}'.format(round(t*dt,2)))
+        #ax.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
+        #ax1 = fig.add_subplot(gs[1,0])
+        ax.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
+        #ax.colorbar(label = '$q$')
+        ax.set_xlim(x_min,x_max)
+        ax.set_ylim(y_min,y_max)
+        fig.canvas.draw()
 
+        # Grab the canvas buffer as a set of pixels, convert them to a Numpy array,
+        # then reshape the 1D set of pixels into an h x w x 3 (RGB) array. Then write
+        # to the movie file.
+        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8').reshape((int(h),int(w),3))
+        writer.append_data(image)
+
+if vis.write_movie is True:
+
+    #End video
+    writer.close()
+
+"""
 ###### PLOTTING #######
-
 new_par_x  = np.zeros(T_PPC)
 new_par_y  = np.zeros(T_PPC)
 
@@ -252,3 +361,4 @@ plt.scatter(Par_x,Par_y)
 plt.subplot(2,1,2)
 plt.scatter(new_par_x,new_par_y)
 plt.show()
+"""
