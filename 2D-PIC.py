@@ -137,8 +137,8 @@ if opt.DebyeTest is True:
 
     print('Creating Debye particle...')
 
-    D_Par_x = ((x_min + x_max) / 2)
-    D_Par_y = ((y_min + y_max) / 2)
+    D_Par_x = ((x_min + x_max) / 2) + (dx / 2)
+    D_Par_y = ((y_min + y_max) / 2) + (dy / 2)
     D_Par_vx = 0.0
     D_Par_vy = 0.0
     D_Par_q = (con.e * 10000)
@@ -382,11 +382,20 @@ for t in range(0,nt):
     if vis.write_movie is False:
 
         if t % 1==0:
+
             Par_x_plot = [i[0] for i in Par]
             Par_y_plot = [i[1] for i in Par]
             Par_vx_plot = [i[2] for i in Par]
             Par_vy_plot = [i[3] for i in Par]
             Par_q_plot = [i[4] for i in Par]
+
+            if opt.DebyeTest is True:
+                del Par_x_plot[-1]
+                del Par_y_plot[-1]
+                del Par_vx_plot[-1]
+                del Par_vy_plot[-1]
+                del Par_q_plot[-1]
+
             plt.clf()
             plt.subplot(2,1,1)
             plt.contourf(X,Y,E_mag)
