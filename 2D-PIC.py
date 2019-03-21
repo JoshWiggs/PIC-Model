@@ -11,6 +11,7 @@ class options:
     def __init__(self):
             self.DebyeTest = bool(True)
             self.RegenerateParticles = bool(False)
+            self.ClosedBoundaries = bool(False)
 
     class visual:
 
@@ -54,21 +55,24 @@ if vis.write_movie is True:
 
 #Define input parameters
 x_min = 0
-x_max = 10
+x_max = 50
 y_min = 0
-y_max = 10
+y_max = 50
 t_min = 0
 t_max = 2.0
-v_min = -1
-v_max = 1
-q_c = [con.e,-(10*con.e)] #particle charge
-m = [con.m_p,(10*con.m_e)] #particle mass
+v_min = -0.25
+v_max = 0.25
+#q_c = [con.e,-(10*con.e)] #particle charge
+#m = [(con.m_p,(10*con.m_e)] #particle mass
 
-nx = 50 #Number of steps taken from y_min to y_max
-ny = 50 #Number of steps taken from x_min to x_max
+q_c = [-con.e] #particle charge
+m = [con.m_e] #particle mass
+
+nx = 100 #Number of steps taken from y_min to y_max
+ny = 100 #Number of steps taken from x_min to x_max
 nt = 200 #Number of time steps
-n_smoothing = 100 #For differencing methods that require smoothing
-PPC = 0.2 #Number of particles per cell
+n_smoothing = 10 #For differencing methods that require smoothing
+PPC = 0 #Number of particles per cell
 
 phi = np.zeros(((nx + 1),(ny + 1))) #Electric potential
 E_x = np.zeros(((nx + 1),(ny + 1))) #x component of the Electric Field
@@ -117,13 +121,14 @@ for i in range(0,T_PPC):
 
     #TODO: Generalise
     j = ran.randint(0,int(len(q_c)-1)) #Random integer for mass and charge selection
+    s = ran.choice((-1,1))
 
     Par_x[i] = ran.uniform(x_min,x_max) #Particle x coordinate
     Par_y[i] = ran.uniform(y_min,y_max) #Particle y coordinate
     Par_vx[i] = ran.uniform(v_min,v_max) #Particle velocity on the x direction
     Par_vy[i] = ran.uniform(v_min,v_max) #Particle velocity on the y direction
-    #Par_vx[i] = (velocity_pdf.rvs() * 0.001)  #Particle velocity on the x direction
-    #Par_vy[i] = (velocity_pdf.rvs() * 0.001) #Particle velocity on the y direction
+    #Par_vx[i] = s*(velocity_pdf.rvs() * 1)  #Particle velocity on the x direction
+    #Par_vy[i] = s*(velocity_pdf.rvs() * 1) #Particle velocity on the y direction
     Par_q[i] = q_c[j] #Particle charge
     Par_m[i] = m[j] #Particle mass
 
@@ -137,12 +142,12 @@ if opt.DebyeTest is True:
 
     print('Creating Debye particle...')
 
-    D_Par_x = ((x_min + x_max) / 2) + (dx / 2)
-    D_Par_y = ((y_min + y_max) / 2) + (dy / 2)
-    D_Par_vx = 0.0
-    D_Par_vy = 0.0
-    D_Par_q = (con.e * 10000)
-    D_Par_m = (con.m_p * 1)
+    D_Par_x = ((x_min + x_max) / 2) + (dx / 2.)
+    D_Par_y = ((y_min + y_max) / 2) + (dy / 4.)
+    D_Par_vx = 0
+    D_Par_vy = 0
+    D_Par_q = -(con.e*100)
+    D_Par_m = 1.
 
     D_Par = [D_Par_x,D_Par_y,D_Par_vx,D_Par_vy,D_Par_q,D_Par_m]
 
@@ -160,7 +165,7 @@ for t in range(0,nt):
         ax.cla()
 
     #Print index 't' every 10 time steps to show progress
-    if t % 10 == 0:
+    if t % 1 == 0:
 
         print(t)
 
@@ -181,31 +186,60 @@ for t in range(0,nt):
         x_i = np.floor(Par[i][0] / dx)
         y_i = np.floor(Par[i][1] / dy)
 
-        #If outside in x domain delete
-        if x_i < 0 or x_i > int(nx-1):
+        #TODO: Fixed closed boundary condition
+        if opt.ClosedBoundaries is True:
 
-            #DEBUG: Print which particle is removed
-            print('Out of range: {}'.format(i))
+            Par[i] = list(Par[i])
 
-            #Remove particle
-            Par.pop(int(i))
+            u_x = 0.
+            u_y = 0.
+
+            if x_i == 0:
+                Par[i][2] = u_x
+                if u_x < 0:
+                    Par[i][2] = (-1 * u_x)
+
+            if x_i == (nx-1):
+                Par[i][2] = u_x
+                if u_x > 0:
+                    Par[i][2] = (-1 * u_x)
+
+            if y_i == 0:
+                Par[i][3] = u_y
+                if u_y < 0:
+                    Par[i][3] = (-1 * u_y)
+
+            if y_i == (ny-1):
+                Par[i][3] = u_y
+                if u_y > 0:
+                    Par[i][3] = (-1 * u_y)
 
         else:
+            #If outside in x domain delete
+            if x_i < 0 or x_i > int(nx-1):
 
-            pass
+                #DEBUG: Print which particle is removed
+                print('Out of range: {}'.format(i))
 
-        #If outside in y domain delete
-        if y_i < 0 or y_i > int(ny-1):
+                #Remove particle
+                Par.pop(int(i))
 
-            #DEBUG: Print which particle is removed
-            print('Out of range: {}'.format(i))
+            else:
 
-            #Remove particle
-            Par.pop(int(i))
+                pass
 
-        else:
+            #If outside in y domain delete
+            if y_i < 0 or y_i > int(ny-1):
 
-            pass
+                #DEBUG: Print which particle is removed
+                print('Out of range: {}'.format(i))
+
+                #Remove particle
+                Par.pop(int(i))
+
+            else:
+
+                pass
 
         #Recalculate number of particle in simulation area in case current
         #particle in loop has been deleted
@@ -287,10 +321,10 @@ for t in range(0,nt):
         #Calculate contribution of each particle's charge to surrounding grid
         #locations in order to calculate charge density on grid
         #TODO: add charge as a particle parameter
-        q_grid[x_i][y_i] += Par[i][4]*((dx - hx) * (dy - hy) / (dx * dy))
-        q_grid[x_i + 1][y_i] += Par[i][4]*((hx * (dy - hy)) / (dx * dy))
-        q_grid[x_i + 1][y_i + 1] += Par[i][4]*((hx * hy) / (dx * dy))
-        q_grid[x_i][y_i + 1] += Par[i][4]*(((dx - hx)*hy) / (dx*dy))
+        q_grid[x_i][y_i] += (Par[i][4]/(dx*dy))*((dx - hx) * (dy - hy) / (dx * dy))
+        q_grid[x_i + 1][y_i] += (Par[i][4]/(dx*dy))*((hx * (dy - hy)) / (dx * dy))
+        q_grid[x_i + 1][y_i + 1] += (Par[i][4]/(dx*dy))*((hx * hy) / (dx * dy))
+        q_grid[x_i][y_i + 1] += (Par[i][4]/(dx*dy))*(((dx - hx)*hy) / (dx*dy))
 
     #Step 2: Compute Electric Potential
     for n in range(0,n_smoothing):
@@ -303,10 +337,10 @@ for t in range(0,nt):
                 (phi[i-1][j] +phi[i+1][j])) + ((dx**2)*(phi[i][j-1]+phi[i][j+1]))
                  / (2*((dy**2) +(dy**2))))
         """
-
-        phi = (q_grid*((dx**2)*(dy**2)) + ((dy**2)*(np.roll(phi,1,axis=0)
+        #TODO: need to check this eqn
+        phi = (((q_grid)*((dx**2)*(dy**2)) + ((dy**2)*(np.roll(phi,1,axis=0)
         + np.roll(phi,-1,axis=0))) + ((dx**2)*(np.roll(phi,1,axis=1)
-        + np.roll(phi,-1,axis=1))) / (2*((dy**2) +(dy**2))))
+        + np.roll(phi,-1,axis=1)))) / (2*((dy**2) + (dy**2))))
 
     #Step 3: Compute Electric Field
 
@@ -320,14 +354,13 @@ for t in range(0,nt):
 
             E_mag[i][j] = np.sqrt((E_x[i][j]**2) + (E_y[i][j]**2))
     """
+    for n in range(0, n_smoothing):
 
-    E_x = ((np.roll(phi,-1,axis=0)) - np.roll(phi,1,axis=0)) / (2 * dx)
+        E_x = ((np.roll(phi,-1,axis=0)) - np.roll(phi,1,axis=0)) / (2 * dx)
 
-    E_y = ((np.roll(phi,-1,axis=1)) - np.roll(phi,1,axis=1)) / (2 * dy)
+        E_y = ((np.roll(phi,-1,axis=1)) - np.roll(phi,1,axis=1)) / (2 * dy)
 
-    E_mag = np.sqrt((E_x**2) + (E_y**2))
-    E_mag = np.delete(E_mag,-1,axis=0)
-    E_mag = np.delete(E_mag,-1,axis=1)
+        E_mag = np.sqrt((E_x**2) + (E_y**2))
 
 
     #Step 4: Move particles
@@ -367,8 +400,8 @@ for t in range(0,nt):
         if opt.DebyeTest is True:
             if i == int(T_PPC-1):
 
-                u_x = 0.0
-                u_y = 0.0
+                u_x = 0
+                u_y = 0
 
         #Update paricle velocity
         Par[i][2] = u_x
@@ -389,7 +422,14 @@ for t in range(0,nt):
             Par_vy_plot = [i[3] for i in Par]
             Par_q_plot = [i[4] for i in Par]
 
+            phi_plot = np.delete(phi,-1,axis=0)
+            phi_plot = np.delete(phi_plot,-1,axis=1)
+
             if opt.DebyeTest is True:
+
+                D_Par_x_plot = Par_x_plot[-1]
+                D_Par_y_plot = Par_y_plot[-1]
+
                 del Par_x_plot[-1]
                 del Par_y_plot[-1]
                 del Par_vx_plot[-1]
@@ -398,13 +438,18 @@ for t in range(0,nt):
 
             plt.clf()
             plt.subplot(2,1,1)
-            plt.contourf(X,Y,E_mag)
-            plt.colorbar(label = '$|E|$')
+            plt.contourf(X,Y,phi_plot)
+            plt.colorbar(label = '$\phi$')
             plt.title('$t$ = {}, Particle Number = {}'.format(round(t*dt,2),T_PPC))
             #plt.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
             plt.subplot(2,1,2)
-            plt.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
-            plt.colorbar(label = '$q$')
+            #plt.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
+            plt.scatter(Par_x_plot,Par_y_plot, c='blue')
+            #plt.colorbar(label = '$q$')
+
+            if opt.DebyeTest is True:
+                plt.scatter(D_Par_x_plot,D_Par_y_plot)
+
             plt.xlim(x_min,x_max)
             plt.ylim(y_min,y_max)
             plt.draw()
