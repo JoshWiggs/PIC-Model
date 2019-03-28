@@ -10,8 +10,8 @@ class options:
 
     def __init__(self):
             self.DebyeTest = bool(False)
-            self.RegenerateParticles = bool(False)
-            self.ClosedBoundaries = bool(False)
+            self.RegenerateParticles = bool(True)
+            self.ClosedBoundaries = bool(False) #Not working
 
     class grids:
 
@@ -24,10 +24,16 @@ class options:
         def __init__(self):
             self.write_movie = bool(True)
 
+    class boundaries:
+
+        def __init__(self):
+            self.CylHardInner = bool(True)
+
 
 opt = options()
 vis = options.visual()
 grid = options.grids()
+bound = options.boundaries()
 
 #Ensure one coordinate system has been selected
 if grid.CartesianGrid is False and grid.CylindricalGrid is False:
@@ -115,10 +121,10 @@ elif grid.CylindricalGrid is True:
     dtheta = (theta_max - theta_min) / ntheta #Size of step in theta domain
     T_c = nr * ntheta #Total number of cells
 
-    vr_min = -0.1 #Minimum intial particle speed in the radial domain
-    vr_max = 0.1 #Maximum intial particle speed in the radial domain
-    vtheta_min = -(con.pi / 4) #Minimum intial particle speed in the azimuthal domain
-    vtheta_max = (con.pi / 4) #Maximum intial particle speed in the azimuthal domain
+    vr_min = -dr #Minimum intial particle speed in the radial domain
+    vr_max = dr #Maximum intial particle speed in the radial domain
+    vtheta_min = -dtheta #Minimum intial particle speed in the azimuthal domain
+    vtheta_max = dtheta #Maximum intial particle speed in the azimuthal domain
 
     phi = np.zeros(((nr + 1),(ntheta + 1))) #Electric potential
     E_x = np.zeros(((nr + 1),(ntheta + 1))) #x component of the Electric Field
@@ -128,6 +134,9 @@ elif grid.CylindricalGrid is True:
     #Populate dimesnional vectors
     r = np.linspace(r_min,r_max,num=nr)
     theta = np.linspace(theta_min,theta_max,num=ntheta)
+
+    #Meshgrid for plotting
+    R,Theta = np.meshgrid(r,theta)
 
 #Time Variables
 t_min = 0 #Start time
@@ -176,6 +185,10 @@ if vis.write_movie is True:
 
     # Setup the imageio writer.
     writer = imageio.get_writer('polar_test.gif', fps=25)
+
+if grid.CylindricalGrid is True:
+
+    fig, ax = plt.subplots(1, 2, subplot_kw=dict(projection='polar'), constrained_layout=True)
 
 print('Initialising {} particles...'.format(T_PPC))
 
@@ -234,6 +247,23 @@ if opt.DebyeTest is True:
 
         raise Exception('This test is only for a cartesian coordinate system')
 
+
+if grid.CylindricalGrid is True:
+    if opt.RegenerateParticles is True:
+        print("That's no moon... It's a macro particle" )
+        Moon_par_r = (r_min + ((r_max - r_min) / 2.))
+        Moon_par_theta = ran.uniform(theta_min,theta_max)
+        Moon_par_vr = 0.
+        Moon_par_vtheta = (dtheta / 2.)
+        Moon_par_q = 0.
+        Moon_par_m = 10000
+
+        Moon_Par = [Moon_par_r,Moon_par_theta,Moon_par_vr,Moon_par_vtheta,Moon_par_q,Moon_par_m]
+
+        Par.append(Moon_Par)
+
+        T_PPC = len(Par)
+
 print('Initialising particle simulation...')
 
 #Numerical loop responsible for interating the particles through time
@@ -243,10 +273,11 @@ for t in range(0,nt):
     if vis.write_movie is True:
 
         #Clear the axes so we can draw the new frame
-        ax.cla()
+        ax[0].cla()
+        ax[1].cla()
 
     #Print index 't' every 10 time steps to show progress
-    if t % 1 == 0:
+    if t % 10 == 0:
 
         print(t)
 
@@ -328,10 +359,20 @@ for t in range(0,nt):
             #Open / clear variables for use
             r_i = 0
             theta_k = 0
+            r_p = Par[i][0]
 
             #Calculate grid locations of particle
             r_i = np.floor((Par[i][0] - r_min) / dr)
             theta_k = np.floor(Par[i][1] / dtheta)
+
+            if bound.CylHardInner is True:
+                #Closed inner boundary
+                if r_p <= (r_min + 0.05):
+                    Par[i] = list(Par[i])
+                    u_rp = 0.
+                    u_rp = float(Par[i][2])
+                    if u_rp < 0:
+                        Par[i][2] = -1*(u_rp)
 
             #If outside in radial domain delete
             if r_i < 0 or r_i > int(nr-1):
@@ -378,7 +419,7 @@ for t in range(0,nt):
         #If particles require regenerating then active loop to generate insertion
         #parameters for as many new particles as required
         if Regenerate_num > 0:
-            for r in range(0,Regenerate_num):
+            for re in range(0,Regenerate_num):
 
                 #This works in the same way as the loop in the pre-process
                 j = ran.randint(0,int(len(q_c)-1))
@@ -394,8 +435,12 @@ for t in range(0,nt):
                     Regen_par = [Regen_par_x,Regen_par_y,Regen_par_vx,Regen_par_vy,Regen_par_q,Regen_par_m]
 
                 elif grid.CylindricalGrid is True:
-                    Regen_par_r = ran.uniform(r_min,r_max)
-                    Regen_par_theta = ran.uniform(theta_min,theta_max)
+
+                    Moon_pos_r = Par[int(T_PPC - 1)][0]
+                    Moon_pos_theta = Par[int(T_PPC - 1)][1]
+
+                    Regen_par_r = Moon_pos_r
+                    Regen_par_theta = ran.uniform((Moon_pos_theta - (con.pi / 4)),(Moon_pos_theta + (con.pi / 4)))
                     Regen_par_vr = ran.uniform(vr_min,vr_max)
                     Regen_par_vtheta = ran.uniform(vtheta_min,vtheta_max)
                     Regen_par_q = q_c[j]
@@ -522,7 +567,7 @@ for t in range(0,nt):
 
         """
         for i in range(1,nx):
-        for j in range(1,ny):
+            for j in range(1,ny):
 
             E_x[i][j] = ((phi[i + 1][j]) - phi[i - 1][j]) / (2 * dx)
 
@@ -594,6 +639,13 @@ for t in range(0,nt):
                 u_x = 0
                 u_y = 0
 
+        if grid.CylindricalGrid is True:
+            if opt.RegenerateParticles is True:
+                if i == int(T_PPC-1):
+
+                    u_x = Moon_par_vr
+                    u_y = Moon_par_vtheta
+
         #Update paricle velocity
         Par[i][2] = u_x
         Par[i][3] = u_y
@@ -615,6 +667,12 @@ for t in range(0,nt):
 
             phi_plot = np.delete(phi,-1,axis=0)
             phi_plot = np.delete(phi_plot,-1,axis=1)
+
+            E_mag_plot = np.delete(E_mag,-1,axis=0)
+            E_mag_plot = np.delete(E_mag_plot,-1,axis=1)
+
+            #q_plot = np.delete(q_grid,-1,axis=0)
+            #q_plot = np.delete(q_plot,-1,axis=1)
 
             if opt.DebyeTest is True:
 
@@ -650,10 +708,31 @@ for t in range(0,nt):
                 plt.pause(0.001)
 
             elif grid.CylindricalGrid is True:
-                plt.clf()
-                ax = plt.subplot(111, projection='polar')
-                ax.scatter(Par_y_plot,Par_x_plot)
-                ax.set_title('$t$ = {}'.format(t*dt,2))
+
+                if opt.RegenerateParticles is True:
+
+                    Moon_Par_x_plot = Par_x_plot[-1]
+                    Moon_Par_y_plot = Par_y_plot[-1]
+
+                    del Par_x_plot[-1]
+                    del Par_y_plot[-1]
+                    del Par_vx_plot[-1]
+                    del Par_vy_plot[-1]
+                    del Par_q_plot[-1]
+
+                ax[0].cla()
+                ax[1].cla()
+
+                ax[0].scatter(Par_y_plot,Par_x_plot)
+                ax[0].scatter(Moon_Par_y_plot,Moon_Par_x_plot,c='green')
+                #ax[0].set_title('$t$ = {}'.format(t*dt,2))
+                ax[0].set_rlim(0,r_max)
+
+                ax[1].contourf(Theta, R, E_mag_plot)
+                ax[1].set_rlim(0,r_max)
+
+                fig.suptitle('$t$ = {}, particles = {}'.format(round(t*dt,2),T_PPC))
+
                 plt.draw()
                 plt.pause(0.001)
 
@@ -665,6 +744,9 @@ for t in range(0,nt):
         Par_vx_plot = [i[2] for i in Par]
         Par_vy_plot = [i[3] for i in Par]
         Par_q_plot = [i[4] for i in Par]
+
+        E_mag_plot = np.delete(E_mag,-1,axis=0)
+        E_mag_plot = np.delete(E_mag_plot,-1,axis=1)
 
         if grid.CartesianGrid is True:
             #ax = fig.add_subplot(gs[0,0])
@@ -680,8 +762,26 @@ for t in range(0,nt):
             fig.canvas.draw()
 
         if grid.CylindricalGrid is True:
-            ax.scatter(Par_y_plot,Par_x_plot)
-            ax.set_title('$t$ = {}'.format(t*dt,2))
+            if opt.RegenerateParticles is True:
+
+                Moon_Par_x_plot = Par_x_plot[-1]
+                Moon_Par_y_plot = Par_y_plot[-1]
+
+                del Par_x_plot[-1]
+                del Par_y_plot[-1]
+                del Par_vx_plot[-1]
+                del Par_vy_plot[-1]
+                del Par_q_plot[-1]
+
+            ax[0].scatter(Par_y_plot,Par_x_plot)
+            if opt.RegenerateParticles is True:
+                ax[0].scatter(Moon_Par_y_plot,Moon_Par_x_plot,c='green')
+            ax[0].set_rlim(0,r_max)
+
+            ax[1].contourf(Theta, R, E_mag_plot)
+            ax[1].set_rlim(0,r_max)
+
+            fig.suptitle('$t$ = {}, particles = {}'.format(round(t*dt,2),T_PPC))
             fig.canvas.draw()
 
         # Grab the canvas buffer as a set of pixels, convert them to a Numpy array,
