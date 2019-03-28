@@ -16,13 +16,13 @@ class options:
     class grids:
 
         def __init__(self):
-            self.CartesianGrid = bool(False)
-            self.CylindricalGrid = bool(True)
+            self.CartesianGrid = bool(True)
+            self.CylindricalGrid = bool(False)
 
     class visual:
 
         def __init__(self):
-            self.write_movie = bool(True)
+            self.write_movie = bool(False)
 
     class boundaries:
 
@@ -151,7 +151,7 @@ dt = (abs(t_min) + t_max) / nt #Size of step on the temporal domain
 q_c = [-con.e] #particle charge
 m = [con.m_e] #particle mass
 
-n_smoothing = 10 #For differencing methods that require smoothing
+n_smoothing = 50 #For differencing methods that require smoothing
 PPC = 1 #Number of particles per cell
 
 T_PPC = int(T_c * PPC) #Total number of particles in simulation
@@ -531,10 +531,10 @@ for t in range(0,nt):
             g_info[i][2] = hr
             g_info[i][3] = htheta
 
-            q_grid[r_i][theta_k] += (Par[i][4])*((((dr**2)-(hr**2))*(dtheta-htheta))/((dr**2)*(dtheta)))
-            q_grid[r_i + 1][theta_k] += (Par[i][4])*(((hr**2)*(dtheta-htheta))/((dr**2)*(dtheta)))
-            q_grid[r_i + 1][theta_k + 1] += (Par[i][4])*(((hr**2)*(htheta))/((dr**2)*(dtheta)))
-            q_grid[r_i][theta_k + 1] += (Par[i][4])*((((dr**2)-(hr**2))*(htheta))/((dr**2)*(dtheta)))
+            q_grid[r_i][theta_k] += ((Par[i][4])*((((dr**2)-(hr**2))*(dtheta-htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
+            q_grid[r_i + 1][theta_k] += ((Par[i][4])*(((hr**2)*(dtheta-htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
+            q_grid[r_i + 1][theta_k + 1] += ((Par[i][4])*(((hr**2)*(htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
+            q_grid[r_i][theta_k + 1] += ((Par[i][4])*((((dr**2)-(hr**2))*(htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
 
     #Step 2: Compute Electric Potential
     for n in range(0,n_smoothing):
@@ -560,6 +560,10 @@ for t in range(0,nt):
             phi = (((q_grid)*((dr**2)*(dtheta**2)) + ((dtheta**2)*(np.roll(phi,1,axis=0)
             + np.roll(phi,-1,axis=0))) + ((dr**2)*(np.roll(phi,1,axis=1)
             + np.roll(phi,-1,axis=1)))) / (2*((dr**2) + (dtheta**2))))
+
+            #if bound.CylHardInner is True:
+
+                #phi[0][:] = 0
 
     #Step 3: Compute Electric Field
 
