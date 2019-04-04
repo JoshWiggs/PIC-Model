@@ -4,6 +4,11 @@ import scipy.constants as con
 import scipy.stats as stats
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import scipy.interpolate as interp
+from scipy.spatial import distance
+
+#Additional constants
+R_j = 7e7 #Jupiter radius [m]
 
 #Options
 class options:
@@ -16,8 +21,8 @@ class options:
     class grids:
 
         def __init__(self):
-            self.CartesianGrid = bool(True)
-            self.CylindricalGrid = bool(False)
+            self.CartesianGrid = bool(False)
+            self.CylindricalGrid = bool(True)
 
     class visual:
 
@@ -35,6 +40,11 @@ vis = options.visual()
 grid = options.grids()
 bound = options.boundaries()
 
+def closest_point(node, nodes):
+    nodes = np.asarray(nodes)
+    dist_2 = (nodes - node)**2
+    return np.argmin(dist_2)
+
 #Ensure one coordinate system has been selected
 if grid.CartesianGrid is False and grid.CylindricalGrid is False:
 
@@ -47,7 +57,7 @@ elif grid.CartesianGrid is True and grid.CylindricalGrid is True:
 ##### CURRENTLY UNUSED ##########
 class maxwell_velocities(stats.rv_continuous):
     def _pdf(self,v):
-        return (((con.m_e)/(2*con.pi*con.k*300))**(3/2))*(4*con.pi*(v**2))*np.exp(-((con.m_e*(v)**2)/(2*con.k*300)))
+        return (((con.m_e)/(2*con.pi*con.k*1e6))**(3/2))*(4*con.pi*(v**2))*np.exp(-((con.m_e*(v)**2)/(2*con.k*1e6)))
 
 velocity_pdf = maxwell_velocities(name='velocity_pdf', a=0.0, b=con.c)
 #################################
@@ -82,25 +92,25 @@ if vis.write_movie is True:
 if grid.CartesianGrid is True:
 
     x_min = 0 #Minimum position in x domain
-    x_max = 50 #Maximum position in x domain
+    x_max = 5*R_j #Maximum position in x domain
     y_min = 0 #Minimum position in y domain
-    y_max = 50 #Maximum position in y domain
-    v_min = -0.25 #Minimum initial particle speed
-    v_max = 0.25 #Maximum initial particle speed
+    y_max = 1*R_j #Maximum position in y domain
+    v_min = -2e5 #Minimum initial particle speed
+    v_max = 2e5 #Maximum initial particle speed
 
     nx = 100 #Number of steps taken from x_min to x_max
-    ny = 100 #Number of steps taken from y_min to y_max
+    ny = 100#Number of steps taken from y_min to y_max
 
     dx = (x_max - x_min) / nx #Size of step in x domain
     dy = (y_max - y_min) / ny #Size of step in y domain
     T_c = nx * ny #Total number of cells
 
     #Populate dimesnional vectors
-    x = np.linspace(x_min,x_max,num=nx)
-    y = np.linspace(y_min,y_max,num=ny)
+    x = np.linspace(x_min,x_max,num=(nx+1))
+    y = np.linspace(y_min,y_max,num=(ny+1))
 
     #Meshgrid for plotting
-    X,Y = np.meshgrid(x,y)
+    X,Y = np.meshgrid((x/R_j),(y/R_j))
 
     phi = np.zeros(((nx + 1),(ny + 1))) #Electric potential
     E_x = np.zeros(((nx + 1),(ny + 1))) #x component of the Electric Field
@@ -114,17 +124,17 @@ elif grid.CylindricalGrid is True:
     theta_min = 0 #Minimum position in the theta domain
     theta_max = 2*con.pi #Maximum position in the theta domain
 
-    nr = 20 #Number of steps taken from r_min to r_max
-    ntheta = 20 #Number of steps taken from theta_min to theta_max
+    nr = 50 #Number of steps taken from r_min to r_max
+    ntheta = 50 #Number of steps taken from theta_min to theta_max
 
     dr = (r_max - r_min) / nr #Size of step in r domian
     dtheta = (theta_max - theta_min) / ntheta #Size of step in theta domain
     T_c = nr * ntheta #Total number of cells
 
-    vr_min = -dr #Minimum intial particle speed in the radial domain
-    vr_max = dr #Maximum intial particle speed in the radial domain
-    vtheta_min = -dtheta #Minimum intial particle speed in the azimuthal domain
-    vtheta_max = dtheta #Maximum intial particle speed in the azimuthal domain
+    vr_min = -(2*dr) #Minimum intial particle speed in the radial domain
+    vr_max = (2*dr) #Maximum intial particle speed in the radial domain
+    vtheta_min = -(2*dtheta) #Minimum intial particle speed in the azimuthal domain
+    vtheta_max = (2*dtheta) #Maximum intial particle speed in the azimuthal domain
 
     phi = np.zeros(((nr + 1),(ntheta + 1))) #Electric potential
     E_x = np.zeros(((nr + 1),(ntheta + 1))) #x component of the Electric Field
@@ -132,8 +142,8 @@ elif grid.CylindricalGrid is True:
     E_mag = np.zeros((nr,ntheta)) #magnitude of the Electric field
 
     #Populate dimesnional vectors
-    r = np.linspace(r_min,r_max,num=nr)
-    theta = np.linspace(theta_min,theta_max,num=ntheta)
+    r = np.linspace(r_min,r_max,num=(nr+1))
+    theta = np.linspace(theta_min,theta_max,num=(ntheta+1))
 
     #Meshgrid for plotting
     R,Theta = np.meshgrid(r,theta)
@@ -146,13 +156,13 @@ t = np.linspace(t_min,t_max,num=nt) #Populate dimesnional vectors
 dt = (abs(t_min) + t_max) / nt #Size of step on the temporal domain
 
 #Particle charge & mass lists
-#q_c = [con.e,-(10*con.e)] #particle charge
-#m = [(con.m_p,(10*con.m_e)] #particle mass
+#q_c = [(1000*con.e),-(10000*con.e)] #particle charge
+#m = [(1000*con.m_p),(10000*con.m_e)] #particle mass
 q_c = [-con.e] #particle charge
 m = [con.m_e] #particle mass
 
 n_smoothing = 50 #For differencing methods that require smoothing
-PPC = 1 #Number of particles per cell
+PPC = .1 #Number of particles per cell
 
 T_PPC = int(T_c * PPC) #Total number of particles in simulation
 
@@ -176,7 +186,7 @@ if vis.write_movie is True:
 
     #Make a figure, get the axes
     fig = plt.Figure()
-    ax = fig.gca(projection='polar')
+    ax = fig.gca() #projection='polar'
     gs = gridspec.GridSpec(2, 1, figure=fig)
 
     # Set the figure canvas to the Agg backend and get the width/height of the canvas (in pixels)
@@ -185,6 +195,10 @@ if vis.write_movie is True:
 
     # Setup the imageio writer.
     writer = imageio.get_writer('polar_test.gif', fps=25)
+
+if grid.CartesianGrid is True:
+
+    fig, ax = plt.subplots(2, 1, constrained_layout=False)
 
 if grid.CylindricalGrid is True:
 
@@ -202,10 +216,10 @@ for i in range(0,T_PPC):
 
         Par_x[i] = ran.uniform(x_min,x_max) #Particle x coordinate
         Par_y[i] = ran.uniform(y_min,y_max) #Particle y coordinate
-        Par_vx[i] = ran.uniform(v_min,v_max) #Particle velocity on the x direction
-        Par_vy[i] = ran.uniform(v_min,v_max) #Particle velocity on the y direction
-        #Par_vx[i] = s*(velocity_pdf.rvs() * 1)  #Particle velocity on the x direction
-        #Par_vy[i] = s*(velocity_pdf.rvs() * 1) #Particle velocity on the y direction
+        #Par_vx[i] = ran.uniform(v_min,v_max) #Particle velocity on the x direction
+        #Par_vy[i] = ran.uniform(v_min,v_max) #Particle velocity on the y direction
+        Par_vx[i] = s*(velocity_pdf.rvs() * 1)  #Particle velocity on the x direction
+        Par_vy[i] = s*(velocity_pdf.rvs() * 1) #Particle velocity on the y direction
 
     elif grid.CylindricalGrid is True:
 
@@ -267,7 +281,7 @@ if grid.CylindricalGrid is True:
 print('Initialising particle simulation...')
 
 #Numerical loop responsible for interating the particles through time
-for t in range(0,nt):
+for t in range(0,nt): #nt
 
     #Activate condition only if writing gif
     if vis.write_movie is True:
@@ -275,6 +289,8 @@ for t in range(0,nt):
         #Clear the axes so we can draw the new frame
         ax[0].cla()
         ax[1].cla()
+
+
 
     #Print index 't' every 10 time steps to show progress
     if t % 10 == 0:
@@ -462,12 +478,17 @@ for t in range(0,nt):
     T_PPC = len(Par)
 
     #Clear grid data & charge density array ready for re-use
-    g_info = np.zeros((T_PPC,4)) #Grid information
+    if grid.CartesianGrid is True:
+        g_info = np.zeros((T_PPC,4)) #Grid information
+    elif grid.CylindricalGrid is True:
+        g_info = np.zeros((T_PPC,6))
 
     if grid.CartesianGrid is True:
         q_grid = np.zeros(((nx + 1),(ny + 1))) #Charge density
     elif grid.CylindricalGrid is True:
         q_grid = np.zeros(((nr + 1),(ntheta + 1))) #Charge density
+        Par_x = np.zeros(T_PPC)
+        Par_y = np.zeros(T_PPC)
 
     #Step 1: Compute charge density on grid using bilinear interpolation interpretation
     #(first-order weighting) from particle locations
@@ -521,20 +542,42 @@ for t in range(0,nt):
             #       raise error and return particle information
             try:
                 hr = Par[i][0] - r[r_i]
+                if hr == 0:
+                    hr = 0.0000001
                 htheta = Par[i][1] - theta[theta_k]
+
             except:
                 raise Exception('ERROR: An error occurred during timestep {} check particle {}'.format(t,i))
 
             #Store grid information relating to each particle for use later
             g_info[i][0] = r_i
             g_info[i][1] = theta_k
-            g_info[i][2] = hr
-            g_info[i][3] = htheta
+            #g_info[i][2] = hr
+            #g_info[i][3] = htheta
 
-            q_grid[r_i][theta_k] += ((Par[i][4])*((((dr**2)-(hr**2))*(dtheta-htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
-            q_grid[r_i + 1][theta_k] += ((Par[i][4])*(((hr**2)*(dtheta-htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
-            q_grid[r_i + 1][theta_k + 1] += ((Par[i][4])*(((hr**2)*(htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
-            q_grid[r_i][theta_k + 1] += ((Par[i][4])*((((dr**2)-(hr**2))*(htheta))/((dr**2)*(dtheta))))*((dtheta/2.)*(dr**2))
+            V_ik = (dtheta/2)*(((r[r_i]+(dr/2))**2) - ((r[r_i]-(dr/2))**2))
+            area_ik = (((r[r_i+1]**2) - (r[r_i]**2))*(theta[theta_k+1]-theta[theta_k]))
+
+            f_ik = (((r[r_i+1]**2)-(float(Par[i][0])**2))*(theta[theta_k+1]-float(Par[i][1])))/area_ik
+            f_i1k = (((float(Par[i][0])**2)-(r[r_i]**2))*(theta[theta_k+1]-float(Par[i][1])))/area_ik
+            f_i1k1 = (((float(Par[i][0])**2)-(r[r_i]**2))*(float(Par[i][1])-theta[theta_k]))/area_ik
+            f_ik1 = (((r[r_i+1]**2)-(float(Par[i][0])**2))*(float(Par[i][1])-theta[theta_k]))/area_ik
+
+            g_info[i][2] = f_ik
+            g_info[i][3] = f_i1k
+            g_info[i][4] = f_i1k1
+            g_info[i][5] = f_ik1
+
+            q_grid[r_i][theta_k] += ((Par[i][4])*f_ik) / V_ik
+            q_grid[r_i + 1][theta_k] += ((Par[i][4])*f_i1k) / V_ik
+            q_grid[r_i + 1][theta_k + 1] += ((Par[i][4])*f_i1k1) / V_ik
+            q_grid[r_i][theta_k + 1] += ((Par[i][4])*f_ik1) / V_ik
+
+        #Par_r_list = [i[0] for i in Par]
+        #Par_theta_list = [i[1] for i in Par]
+        #points = list(zip(Par_r_list,Par_theta_list))
+        #Par_q_list = [i[4] for i in Par]
+        #q_grid = interp.griddata(points,Par_q_list,(R,Theta))
 
     #Step 2: Compute Electric Potential
     for n in range(0,n_smoothing):
@@ -557,16 +600,15 @@ for t in range(0,nt):
 
         elif grid.CylindricalGrid is True:
 
-            phi = (((q_grid)*((dr**2)*(dtheta**2)) + ((dtheta**2)*(np.roll(phi,1,axis=0)
-            + np.roll(phi,-1,axis=0))) + ((dr**2)*(np.roll(phi,1,axis=1)
-            + np.roll(phi,-1,axis=1)))) / (2*((dr**2) + (dtheta**2))))
+            phi = ((q_grid*((r+(dr/2)**2)-(r-(dr/2)**2))) + (((2*(r+(dr/2)))/(np.roll(r,-1,axis=0)-r))*np.roll(phi,-1,axis=0)) + (((2*(r-(dr/2)))/(r-np.roll(r,1,axis=0)))*np.roll(phi,1,axis=0)) + (((2*((r+(dr/2))-(r-(dr/2))))/(((dtheta)**2))*r)*(np.roll(phi,-1,axis=1)+np.roll(phi,1,axis=1))))/ (((2*(r+(dr/2)))/(np.roll(r,-1,axis=0)-r)) + ((2*(r-(dr/2)))/(r-np.roll(r,1,axis=0))) + ((4*((r+(dr/2))-(r-(dr/2))))/(((dtheta)**2))*r))
+            #phi = ((((q_grid)*((dr**2)*(dtheta**2))) + ((dtheta**2)*(np.roll(phi,1,axis=0) + np.roll(phi,-1,axis=0))) + (((dr**2)/(r**2))*(np.roll(phi,1,axis=1) + np.roll(phi,-1,axis=1))) +((((dtheta**2)*dr)/(2*r))*(np.roll(phi,-1,axis=0)-np.roll(phi,1,axis=0)))) / (2*((dtheta**2)+((dr**2)/r))))
 
-            #if bound.CylHardInner is True:
+            if bound.CylHardInner is True:
 
-                #phi[0][:] = 0
+                phi[0][:] = 0
+                #phi[nr][:] = 0
 
     #Step 3: Compute Electric Field
-
     if grid.CartesianGrid is True:
 
         """
@@ -591,11 +633,13 @@ for t in range(0,nt):
         #TODO: Look at half-grid implications in Birdsall & Langdon
         for n in range(0, n_smoothing):
 
-            E_x = ((np.roll(phi,-1,axis=0)) - np.roll(phi,1,axis=0)) / (2 * dr)
+            E_r_half = -(((np.roll(phi,-1,axis=0)) - np.roll(phi,1,axis=0)) / (np.roll(r,-1,axis=0) - r))
 
-            E_y = ((np.roll(phi,-1,axis=1)) - np.roll(phi,1,axis=1)) / (2 * dtheta)
+            E_theta = -(((np.roll(phi,-1,axis=1)) - np.roll(phi,1,axis=1)) / (r * dtheta))
 
-            E_mag = np.sqrt((E_x**2) + (E_y**2))
+            E_r = (((r+(dr/2))*np.roll(E_r_half,-1,axis=0)) + ((r-(dr/2))*np.roll(E_r_half,1,axis=0))) / (2*r)
+
+            E_mag = np.sqrt((E_r**2) + (E_theta**2))
 
 
     #Step 4: Move particles
@@ -606,12 +650,22 @@ for t in range(0,nt):
 
         #Access particle information and the grid information relating to they
         #particle for use in calculating particle motion
-        x_i = int(g_info[i][0])
-        y_i = int(g_info[i][1])
-        u_x_old = float(Par[i][2])
-        u_y_old = float(Par[i][3])
-        hx = float(g_info[i][2])
-        hy = float(g_info[i][3])
+        if grid.CartesianGrid is True:
+            x_i = int(g_info[i][0])
+            y_i = int(g_info[i][1])
+            u_x_old = float(Par[i][2])
+            u_y_old = float(Par[i][3])
+            hx = float(g_info[i][2])
+            hy = float(g_info[i][3])
+        elif grid.CylindricalGrid is True:
+            r_i = int(g_info[i][0])
+            theta_k = int(g_info[i][1])
+            u_x_old = float(Par[i][2])
+            u_y_old = float(Par[i][3])
+            f_ik = float(g_info[i][2])
+            f_i1k = float(g_info[i][3])
+            f_i1k1 = float(g_info[i][4])
+            f_ik1 = float(g_info[i][5])
 
         #Clear variables for reuse
         E_Par_x = float(0) #Electric field felt by the particle in the x domain
@@ -625,8 +679,8 @@ for t in range(0,nt):
             E_Par_y = (E_y[x_i][y_i]*(dx*dy)/((dx-hx)-(dy-hy))) + (E_y[x_i+1][y_i]*((dx*dy)/(hx*(dy-hy)))) + (E_y[x_i+1][y_i+1])*((dx*dy)/(hx*hy)) + (E_y[x_i][y_i+1]*((dx*dy)/(dx-hx)*hy))
 
         elif grid.CylindricalGrid is True:
-            E_Par_x = (E_x[x_i][y_i]*(dr*dtheta)/((dr-hx)*(dtheta-hy))) + (E_x[x_i+1][y_i]*((dr*dtheta)/(hx*(dtheta-hy)))) + (E_x[x_i+1][y_i+1])*((dr*dtheta)/(hx*hy)) + (E_x[x_i][y_i+1]*((dr*dtheta)/(dr-hx)*hy))
-            E_Par_y = (E_y[x_i][y_i]*(dr*dtheta)/((dr-hx)-(dtheta-hy))) + (E_y[x_i+1][y_i]*((dr*dtheta)/(hx*(dtheta-hy)))) + (E_y[x_i+1][y_i+1])*((dr*dtheta)/(hx*hy)) + (E_y[x_i][y_i+1]*((dr*dtheta)/(dr-hx)*hy))
+            E_Par_x = (E_r[r_i][theta_k]*f_ik) + (E_r[r_i+1][theta_k]*f_i1k) + (E_r[r_i+1][theta_k+1]*f_i1k1) + (E_r[r_i][theta_k+1]*f_ik1)
+            E_Par_y = (E_theta[r_i][theta_k]*f_ik) + (E_theta[r_i+1][theta_k]*f_i1k) + (E_theta[r_i+1][theta_k+1]*f_i1k1) + (E_theta[r_i][theta_k+1]*f_ik1)
 
         #Using updated electic field calculate updated particle velocities
         #TODO: missing charge and mass from calculation
@@ -669,11 +723,17 @@ for t in range(0,nt):
             Par_vy_plot = [i[3] for i in Par]
             Par_q_plot = [i[4] for i in Par]
 
-            phi_plot = np.delete(phi,-1,axis=0)
-            phi_plot = np.delete(phi_plot,-1,axis=1)
+            #Par_x_plot = np.asarray(Par_x_plot)
+            #Par_y_plot = np.asarray(Par_y_plot)
 
-            E_mag_plot = np.delete(E_mag,-1,axis=0)
-            E_mag_plot = np.delete(E_mag_plot,-1,axis=1)
+            #Par_x_plot = (Par_x_plot/R_j)
+            #Par_y_plot = (Par_y_plot/R_j)
+
+            #phi_plot = np.delete(phi,-1,axis=0)
+            #phi_plot = np.delete(phi_plot,-1,axis=1)
+
+            #E_mag_plot = np.delete(E_mag,-1,axis=0)
+            #E_mag_plot = np.delete(E_mag_plot,-1,axis=1)
 
             #q_plot = np.delete(q_grid,-1,axis=0)
             #q_plot = np.delete(q_plot,-1,axis=1)
@@ -691,23 +751,26 @@ for t in range(0,nt):
 
             if grid.CartesianGrid is True:
                 plt.clf()
-                plt.subplot(3,1,1)
-                plt.contourf(X,Y,phi_plot)
-                plt.colorbar(label = '$\phi$')
+                plt.subplot(2,1,1)
+                plt.contourf(X,Y,E_mag)
+                plt.colorbar(label = '$|E|$')
                 plt.title('$t$ = {}, Particle Number = {}'.format(round(t*dt,2),T_PPC))
                 #plt.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
-                plt.subplot(3,1,2)
-                plt.plot(x,-(phi_plot[49]))
-                plt.subplot(3,1,3)
-                #plt.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
-                plt.scatter(Par_x_plot,Par_y_plot, c='blue')
-                #plt.colorbar(label = '$q$')
+                #plt.plot(x,-(phi_plot[49]))
+                plt.ylabel('$y$ $(R_j)$')
+
+                plt.subplot(2,1,2)
+                plt.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
+                #plt.scatter(Par_x_plot,Par_y_plot, c='blue')
+                plt.colorbar(label = '$q$')
+                plt.xlabel('$x$ $(R_j)$')
+                plt.ylabel('$y$ $(R_j)$')
 
                 if opt.DebyeTest is True:
                     plt.scatter(D_Par_x_plot,D_Par_y_plot)
 
-                plt.xlim(x_min,x_max)
-                plt.ylim(y_min,y_max)
+                plt.xlim((x_min/R_j),(x_max/R_j))
+                plt.ylim((y_min/R_j),(y_max/R_j))
                 plt.draw()
                 plt.pause(0.001)
 
@@ -728,11 +791,12 @@ for t in range(0,nt):
                 ax[1].cla()
 
                 ax[0].scatter(Par_y_plot,Par_x_plot)
-                ax[0].scatter(Moon_Par_y_plot,Moon_Par_x_plot,c='green')
+                if opt.RegenerateParticles is True:
+                    ax[0].scatter(Moon_Par_y_plot,Moon_Par_x_plot,c='green')
                 #ax[0].set_title('$t$ = {}'.format(t*dt,2))
                 ax[0].set_rlim(0,r_max)
 
-                ax[1].contourf(Theta, R, E_mag_plot)
+                ax[1].contourf(Theta, R, E_mag)
                 ax[1].set_rlim(0,r_max)
 
                 fig.suptitle('$t$ = {}, particles = {}'.format(round(t*dt,2),T_PPC))
@@ -749,20 +813,33 @@ for t in range(0,nt):
         Par_vy_plot = [i[3] for i in Par]
         Par_q_plot = [i[4] for i in Par]
 
-        E_mag_plot = np.delete(E_mag,-1,axis=0)
-        E_mag_plot = np.delete(E_mag_plot,-1,axis=1)
+        #Par_x_plot = np.asarray(Par_x_plot)
+        #Par_y_plot = np.asarray(Par_y_plot)
+
+        #Par_x_plot = (Par_x_plot/R_j)
+        #Par_y_plot = (Par_y_plot/R_j)
+
+        #E_mag_plot = np.delete(E_mag,-1,axis=0)
+        #E_mag_plot = np.delete(E_mag_plot,-1,axis=1)
 
         if grid.CartesianGrid is True:
-            #ax = fig.add_subplot(gs[0,0])
-            #ax.contourf(X,Y,E_mag)
-            #ax.colorbar(label = '$|E|$')
-            ax.set_title('$t$ = {}, Particle Number = {}'.format(round(t*dt,2),T_PPC))
+
+            fig.suptitle('$t$ = {}, Particle Number = {}'.format(round(t*dt,2),T_PPC))
+            scat = ax[0].contourf(X,Y,E_mag)
+            #cbar = plt.colorbar(scat,ax=ax[0])
+            #cbar.set_label('$|E|$')
+            ax[0].set_ylabel('$y$ $(R_j)$')
             #ax.quiver(X,Y,Par_vx_plot,Par_vy_plot,color='white')
             #ax1 = fig.add_subplot(gs[1,0])
-            ax.scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
-            #ax.colorbar(label = '$q$')
-            ax.set_xlim(x_min,x_max)
-            ax.set_ylim(y_min,y_max)
+            ax[0].set_xlim((x_min/R_j),(x_max/R_j))
+            ax[0].set_ylim((y_min/R_j),(y_max/R_j))
+            ax[1].set_xlim((x_min/R_j),(x_max/R_j))
+            ax[1].set_ylim((y_min/R_j),(y_max/R_j))
+            scat = ax[1].scatter(Par_x_plot,Par_y_plot, c=Par_q_plot, cmap=cm.seismic)
+            #cbar = plt.colorbar(scat,ax=ax[1])
+            #cbar.set_label('$q$')
+            ax[1].set_xlabel('$x$ $(R_j)$')
+            ax[1].set_ylabel('$y$ $(R_j)$')
             fig.canvas.draw()
 
         if grid.CylindricalGrid is True:
@@ -782,7 +859,7 @@ for t in range(0,nt):
                 ax[0].scatter(Moon_Par_y_plot,Moon_Par_x_plot,c='green')
             ax[0].set_rlim(0,r_max)
 
-            ax[1].contourf(Theta, R, E_mag_plot)
+            ax[1].contourf(Theta, R, E_mag)
             ax[1].set_rlim(0,r_max)
 
             fig.suptitle('$t$ = {}, particles = {}'.format(round(t*dt,2),T_PPC))
@@ -793,6 +870,7 @@ for t in range(0,nt):
         # to the movie file.
         image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8').reshape((int(h),int(w),3))
         writer.append_data(image)
+
 
 if vis.write_movie is True:
 
